@@ -1,0 +1,145 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getProfile() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
+    }
+    
+    function isRole(role) {
+      return isAuthenticated() && getProfile().role == role;
+    }
+    
+    function isClinic(clinicId) {
+      return isAuthenticated() && getProfile().clinic_id == clinicId;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ===============================================================
+    // Clinics
+    // ===============================================================
+    match /clinics/{clinicId} {
+      allow read: if isAuthenticated();
+      allow write: if isRole('admin');
+    }
+
+    // ===============================================================
+    // Profiles
+    // ===============================================================
+    match /profiles/{profileId} {
+      allow read: if isOwner(profileId) || 
+                  (isAuthenticated() && getProfile().clinic_id == resource.data.clinic_id && getProfile().role in ['admin', 'doctor', 'nurse']);
+      allow create: if isRole('admin');
+      allow update: if isOwner(profileId) && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['push_token', 'avatar_url', 'display_name', 'last_seen_at']);
+    }
+
+    // ===============================================================
+    // Patients
+    // ===============================================================
+    match /patients/{patientId} {
+      allow read: if (isAuthenticated() && getProfile().clinic_id == resource.data.clinic_id && getProfile().role in ['admin', 'doctor', 'nurse']) ||
+                  (isAuthenticated() && resource.data.profile_id == request.auth.uid);
+      allow create: if isRole('admin');
+      allow update: if isRole('admin'); // TRD: Admin can update non-clinical fields
+    }
+
+    // ===============================================================
+    // Care Team Assignments
+    // ===============================================================
+    match /care_team_assignments/{assignmentId} {
+      allow read: if isAuthenticated() && getProfile().role in ['admin', 'doctor', 'nurse'];
+      allow write: if isRole('admin');
+    }
+
+    // ===============================================================
+    // Care Plan Entries (Append-only)
+    // ===============================================================
+    match /care_plan_entries/{entryId} {
+      allow read: if isAuthenticated() && getProfile().role in ['doctor', 'nurse'];
+      allow create: if isRole('doctor');
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // Patient Tasks
+    // ===============================================================
+    match /patient_tasks/{taskId} {
+      allow read: if (isAuthenticated() && get(/databases/$(database)/documents/patients/$(resource.data.patient_id)).data.profile_id == request.auth.uid) ||
+                  (isAuthenticated() && getProfile().role in ['admin', 'doctor', 'nurse']);
+      // Only system triggers should create/update these in a real Supabase setup. 
+      // In Firebase, we might allow the provider or a cloud function.
+      allow write: if isAuthenticated() && getProfile().role in ['doctor', 'nurse'];
+    }
+
+    // ===============================================================
+    // Compliance Logs (Append-only)
+    // ===============================================================
+    match /compliance_logs/{logId} {
+      allow read: if isAuthenticated() && getProfile().role in ['admin', 'doctor', 'nurse'];
+      allow create: if isAuthenticated() && (
+        (getProfile().role == 'patient' && get(/databases/$(database)/documents/patients/$(request.resource.data.patient_id)).data.profile_id == request.auth.uid) ||
+        (getProfile().role in ['doctor', 'nurse'])
+      );
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // Vitals
+    // ===============================================================
+    match /vitals/{vitalId} {
+      allow read: if (isAuthenticated() && getProfile().role in ['admin', 'doctor', 'nurse']) ||
+                  (isAuthenticated() && get(/databases/$(database)/documents/patients/$(resource.data.patient_id)).data.profile_id == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.is_editable == true && 
+                    (request.time < resource.data.recorded_at + duration.value(1, 'h'));
+      allow delete: if false;
+    }
+
+    // ===============================================================
+    // Alert Thresholds
+    // ===============================================================
+    match /alert_thresholds/{thresholdId} {
+      allow read: if isAuthenticated() && getProfile().role in ['doctor', 'nurse'];
+      allow write: if isRole('doctor');
+    }
+
+    // ===============================================================
+    // Alerts
+    // ===============================================================
+    match /alerts/{alertId} {
+      allow read: if isAuthenticated() && getProfile().role in ['doctor', 'nurse'];
+      allow create: if isAuthenticated(); // Usually triggered by system
+      allow update: if isRole('doctor'); // Resolve alerts
+    }
+
+    // ===============================================================
+    // Shift Notes (Append-only)
+    // ===============================================================
+    match /shift_notes/{noteId} {
+      allow read: if isAuthenticated() && getProfile().role in ['doctor', 'nurse'];
+      allow create: if isAuthenticated() && getProfile().role in ['doctor', 'nurse'];
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // Appointments
+    // ===============================================================
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && getProfile().role in ['admin', 'doctor', 'nurse'];
+    }
+  }
+}

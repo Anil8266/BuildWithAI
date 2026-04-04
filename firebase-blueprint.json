@@ -1,0 +1,244 @@
+{
+  "entities": {
+    "Clinic": {
+      "title": "Clinic",
+      "description": "Clinic record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "timezone": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Profile": {
+      "title": "Profile",
+      "description": "User profile extending auth.users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clinic_id": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "doctor", "nurse", "patient"] },
+        "full_name": { "type": "string" },
+        "display_name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "avatar_url": { "type": "string" },
+        "push_token": { "type": "string" },
+        "is_active": { "type": "boolean" },
+        "last_seen_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "clinic_id", "role", "full_name", "email"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient master record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "profile_id": { "type": "string" },
+        "clinic_id": { "type": "string" },
+        "mrn": { "type": "string" },
+        "full_name": { "type": "string" },
+        "date_of_birth": { "type": "string", "format": "date" },
+        "gender": { "type": "string", "enum": ["male", "female", "other", "prefer_not_to_say"] },
+        "phone": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "address": { "type": "string" },
+        "emergency_contact": { "type": "object" },
+        "triage_status": { "type": "string", "enum": ["critical", "pending", "stable"] },
+        "is_active": { "type": "boolean" },
+        "has_app_access": { "type": "boolean" },
+        "last_app_activity": { "type": "string", "format": "date-time" },
+        "onboarding_invite_sent_at": { "type": "string", "format": "date-time" },
+        "icd10_diagnoses": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" },
+        "created_by": { "type": "string" }
+      },
+      "required": ["id", "clinic_id", "full_name", "date_of_birth", "triage_status"]
+    },
+    "CareTeamAssignment": {
+      "title": "CareTeamAssignment",
+      "description": "Many-to-many between patients and provider profiles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "provider_id": { "type": "string" },
+        "role": { "type": "string", "enum": ["doctor", "nurse"] },
+        "is_primary": { "type": "boolean" },
+        "assigned_by": { "type": "string" },
+        "assigned_at": { "type": "string", "format": "date-time" },
+        "removed_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patient_id", "provider_id", "role"]
+    },
+    "CarePlanEntry": {
+      "title": "CarePlanEntry",
+      "description": "Clinical record of every care plan action",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "author_id": { "type": "string" },
+        "entry_type": { "type": "string", "enum": ["medication_change", "new_task", "dosage_change", "lab_request", "general_note", "amendment"] },
+        "medication_id": { "type": "string" },
+        "dosage_amount": { "type": "number" },
+        "dosage_unit": { "type": "string" },
+        "frequency": { "type": "string" },
+        "clinical_note": { "type": "string" },
+        "patient_message": { "type": "string" },
+        "is_urgent": { "type": "boolean" },
+        "is_active": { "type": "boolean" },
+        "effective_from": { "type": "string", "format": "date" },
+        "effective_until": { "type": "string", "format": "date" },
+        "original_entry_id": { "type": "string" },
+        "icd10_code": { "type": "string" }
+      },
+      "required": ["id", "patient_id", "author_id", "entry_type", "patient_message"]
+    },
+    "PatientTask": {
+      "title": "PatientTask",
+      "description": "Plain-language tasks visible to patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "care_plan_entry_id": { "type": "string" },
+        "task_type": { "type": "string", "enum": ["medication", "photo_upload", "appointment", "general"] },
+        "instruction": { "type": "string" },
+        "context_note": { "type": "string" },
+        "scheduled_date": { "type": "string", "format": "date" },
+        "scheduled_time": { "type": "string" },
+        "time_of_day": { "type": "string", "enum": ["morning", "afternoon", "evening", "anytime"] },
+        "is_urgent": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["pending", "done", "skipped", "missed"] },
+        "completed_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patient_id", "task_type", "instruction", "scheduled_date", "status"]
+    },
+    "ComplianceLog": {
+      "title": "ComplianceLog",
+      "description": "Immutable log of every patient task action",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "task_id": { "type": "string" },
+        "action": { "type": "string", "enum": ["done", "skipped", "missed", "undo"] },
+        "skip_reason": { "type": "string" },
+        "skip_reason_other": { "type": "string" },
+        "undo_of": { "type": "string" },
+        "logged_at": { "type": "string", "format": "date-time" },
+        "source": { "type": "string", "enum": ["app", "ivr", "sms", "manual"] }
+      },
+      "required": ["id", "patient_id", "task_id", "action", "logged_at"]
+    },
+    "Vital": {
+      "title": "Vital",
+      "description": "Manual vital readings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "recorded_by": { "type": "string" },
+        "vital_type": { "type": "string", "enum": ["blood_pressure_systolic", "blood_pressure_diastolic", "heart_rate", "blood_glucose", "spo2", "temperature", "weight_kg", "custom"] },
+        "value": { "type": "number" },
+        "unit": { "type": "string" },
+        "custom_label": { "type": "string" },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "source": { "type": "string", "enum": ["manual", "device", "import"] },
+        "is_editable": { "type": "boolean" }
+      },
+      "required": ["id", "patient_id", "recorded_by", "vital_type", "value", "unit", "recorded_at"]
+    },
+    "AlertThreshold": {
+      "title": "AlertThreshold",
+      "description": "Per-patient, per-vital threshold configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "doctor_id": { "type": "string" },
+        "vital_type": { "type": "string" },
+        "min_value": { "type": "number" },
+        "max_value": { "type": "number" },
+        "unit": { "type": "string" },
+        "duration_minutes": { "type": "integer" },
+        "missed_dose_count": { "type": "integer" },
+        "alert_channel": { "type": "array", "items": { "type": "string" } },
+        "is_active": { "type": "boolean" }
+      },
+      "required": ["id", "patient_id", "doctor_id", "vital_type"]
+    },
+    "Alert": {
+      "title": "Alert",
+      "description": "Triggered alerts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "threshold_id": { "type": "string" },
+        "alert_type": { "type": "string", "enum": ["vital_breach", "missed_doses", "lab_result", "no_app_activity", "manual"] },
+        "severity": { "type": "string", "enum": ["critical", "pending"] },
+        "title": { "type": "string" },
+        "detail": { "type": "string" },
+        "triggered_value": { "type": "number" },
+        "triggered_at": { "type": "string", "format": "date-time" },
+        "resolved_at": { "type": "string", "format": "date-time" },
+        "resolved_by": { "type": "string" },
+        "resolution_note": { "type": "string" }
+      },
+      "required": ["id", "patient_id", "alert_type", "severity", "title", "triggered_at"]
+    },
+    "ShiftNote": {
+      "title": "ShiftNote",
+      "description": "Append-only shift note log per patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "author_id": { "type": "string" },
+        "note": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patient_id", "author_id", "note"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Appointment records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "doctor_id": { "type": "string" },
+        "booked_by": { "type": "string" },
+        "appointment_type": { "type": "string", "enum": ["in_person", "video_call", "phone_call"] },
+        "scheduled_at": { "type": "string", "format": "date-time" },
+        "duration_minutes": { "type": "integer" },
+        "status": { "type": "string", "enum": ["confirmed", "cancelled", "completed", "no_show"] },
+        "notes": { "type": "string" },
+        "cancelled_at": { "type": "string", "format": "date-time" },
+        "cancelled_by": { "type": "string" }
+      },
+      "required": ["id", "patient_id", "doctor_id", "appointment_type", "scheduled_at"]
+    }
+  },
+  "firestore": {
+    "/clinics/{clinicId}": { "schema": "Clinic", "description": "Clinic data" },
+    "/profiles/{profileId}": { "schema": "Profile", "description": "User profiles" },
+    "/patients/{patientId}": { "schema": "Patient", "description": "Patient records" },
+    "/care_team_assignments/{assignmentId}": { "schema": "CareTeamAssignment", "description": "Patient-Provider links" },
+    "/care_plan_entries/{entryId}": { "schema": "CarePlanEntry", "description": "Clinical care plan entries" },
+    "/patient_tasks/{taskId}": { "schema": "PatientTask", "description": "Tasks for patients" },
+    "/compliance_logs/{logId}": { "schema": "ComplianceLog", "description": "Audit trail of patient actions" },
+    "/vitals/{vitalId}": { "schema": "Vital", "description": "Vital readings" },
+    "/alert_thresholds/{thresholdId}": { "schema": "AlertThreshold", "description": "Threshold configs" },
+    "/alerts/{alertId}": { "schema": "Alert", "description": "Triggered alerts" },
+    "/shift_notes/{noteId}": { "schema": "ShiftNote", "description": "Shift notes" },
+    "/appointments/{appointmentId}": { "schema": "Appointment", "description": "Appointments" }
+  }
+}

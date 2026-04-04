@@ -1,0 +1,8 @@
+{
+  "name": "SYNCRO",
+  "description": "A unified coordination engine for providers to monitor, manage, and engage patients in real-time",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
