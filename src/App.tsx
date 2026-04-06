@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Activity, ShieldCheck, Calendar, Bell, ClipboardList, BookOpen, Users } from 'lucide-react';
 import { UserRole, Patient, Organization, Profile } from './types';
-import { MOCK_PATIENTS, MOCK_PROFILES, MOCK_ORGANIZATIONS } from './data';
+import { MOCK_PROFILES } from './data';
 import { Toast } from './components/UI';
+import { subscribeToPatients } from './services/dataService';
 import { TopNav } from './components/TopNav';
 import { TriageDashboard } from './views/TriageDashboard';
 import { PatientProfile } from './views/PatientProfile';
@@ -178,7 +179,17 @@ const AuthView = ({ onLogin }: { onLogin: (role: UserRole) => void }) => {
 export default function App() {
   const [role, setRole] = useState<UserRole | 'AUTH'>('AUTH');
   const [activeScreen, setActiveScreen] = useState('triage');
-  const [patients, setPatients] = useState<Patient[]>(MOCK_PATIENTS);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  
+  React.useEffect(() => {
+    if (role !== 'AUTH') {
+      const unsubscribe = subscribeToPatients((data) => {
+        setPatients(data);
+      });
+      return () => unsubscribe();
+    }
+  }, [role]);
+
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   
   // Doctor states
@@ -271,7 +282,7 @@ export default function App() {
               {/* Shared Screens */}
               {activeScreen === 'profile' && (
                 <ProfileView 
-                  profile={MOCK_PROFILES.find(p => p.id === (role === 'doctor' ? 'doc001' : 'doc002')) || MOCK_PROFILES[0]} 
+                  profile={MOCK_PROFILES[0]} 
                   isOwnProfile={true}
                   onBack={() => handleNavigate(role === 'admin' ? 'admin-home' : role === 'nurse' ? 'nurse' : 'triage')}
                 />
