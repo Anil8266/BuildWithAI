@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { UserPlus, Search, Users, AlertCircle, Activity, X, Check, ChevronRight } from 'lucide-react';
 import { Patient } from '../types';
 import { Badge, Avatar, SearchInput, EmptyState } from '../components/UI';
+import { seedSupabaseDatabase } from '../services/seedSupabase';
+import { Database } from 'lucide-react';
 
 interface AdminViewProps {
   patients: Patient[];
@@ -31,6 +33,20 @@ export const AdminView = ({ patients, onSelectPatient, onLogout }: AdminViewProp
   const [form, setForm] = useState<Record<string, string>>({});
   const [isDone, setIsDone] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'critical' | 'pending' | 'stable'>('all');
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const handleSeed = async () => {
+    if (!confirm("This will seed your Supabase database with mock data. Proceed?")) return;
+    setIsSeeding(true);
+    try {
+      await seedSupabaseDatabase();
+      alert("Database seeded successfully!");
+    } catch (err) {
+      alert("Seeding failed. Check console.");
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   const filtered = patients.filter(p => {
     const matchSearch = p.full_name.toLowerCase().includes(search.toLowerCase()) || (p.mrn || '').toLowerCase().includes(search.toLowerCase());
@@ -66,9 +82,14 @@ export const AdminView = ({ patients, onSelectPatient, onLogout }: AdminViewProp
             <h1 className="text-2xl font-serif font-bold text-navy">Organization Management</h1>
             <p className="text-sm text-gray-secondary mt-1">St. Jude Medical Center • HOSP-001</p>
           </div>
-          <button onClick={() => setIsRegistering(true)} className="btn-primary shadow-md shadow-primary/20">
-            <UserPlus className="w-4 h-4" /> Onboard Patient
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={handleSeed} disabled={isSeeding} className="btn-secondary">
+              <Database className="w-4 h-4" /> {isSeeding ? 'Seeding...' : 'Seed Supabase'}
+            </button>
+            <button onClick={() => setIsRegistering(true)} className="btn-primary shadow-md shadow-primary/20">
+              <UserPlus className="w-4 h-4" /> Onboard Patient
+            </button>
+          </div>
         </div>
       </header>
 

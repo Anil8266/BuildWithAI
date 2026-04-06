@@ -4,7 +4,7 @@ import { Activity, ShieldCheck, Calendar, Bell, ClipboardList, BookOpen, Users }
 import { UserRole, Patient, Organization, Profile } from './types';
 import { MOCK_PROFILES } from './data';
 import { Toast } from './components/UI';
-import { subscribeToPatients } from './services/dataService';
+import { subscribeToPatients } from './services/supabaseService';
 import { TopNav } from './components/TopNav';
 import { TriageDashboard } from './views/TriageDashboard';
 import { PatientProfile } from './views/PatientProfile';

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Save } from 'lucide-react';
 import { Patient } from '../types';
+import { createShiftNote } from '../services/supabaseService';
+import { MOCK_PROFILES } from '../data';
 
 interface ShiftNoteEditorProps {
   patient: Patient;
@@ -15,9 +17,19 @@ export const ShiftNoteEditor = ({ patient, isOpen, onClose }: ShiftNoteEditorPro
   const MAX = 140;
   const len = note.length;
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => { setSaved(false); onClose(); }, 1500);
+  const handleSave = async () => {
+    try {
+      await createShiftNote({
+        patient_id: patient.id,
+        author_id: MOCK_PROFILES[0].id,
+        note: note
+      });
+      setSaved(true);
+      setTimeout(() => { setSaved(false); onClose(); }, 1500);
+    } catch (err) {
+      console.error("Failed to save shift note:", err);
+      alert("Failed to save shift note.");
+    }
   };
 
   return (

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Save, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { Patient } from '../types';
+import { createCarePlanEntry } from '../services/supabaseService';
+import { MOCK_PROFILES } from '../data';
 
 interface CarePlanEditorProps {
   patient: Patient;
@@ -47,14 +49,30 @@ export const CarePlanEditor = ({ patient, isOpen, onClose, onSaved }: CarePlanEd
     doSave();
   };
 
-  const doSave = () => {
+  const doSave = async () => {
     setIsSaving(true);
     setShowConfirmUrgent(false);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await createCarePlanEntry({
+        patient_id: patient.id,
+        author_id: MOCK_PROFILES[0].id, // Default to first mock profile for now
+        entry_type: entryType,
+        medication_name: medication,
+        dosage_amount: dosage ? Number(dosage) : null,
+        dosage_unit: unit,
+        frequency,
+        clinical_note: clinicalNote,
+        patient_message: patientMessage,
+        is_urgent: isUrgent,
+      });
       onSaved?.();
       onClose();
-    }, 1200);
+    } catch (err) {
+      console.error("Failed to save care plan:", err);
+      alert("Failed to save care plan entry.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDiscard = () => {

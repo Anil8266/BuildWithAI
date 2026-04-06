@@ -2,17 +2,12 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Edit2, Calendar, Flag, Activity, ClipboardList, FileText, Stethoscope, Plus, Phone, MessageSquare } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Patient } from '../types';
+import { Patient, Vital } from '../types';
 import { Badge, Avatar, BackButton } from '../components/UI';
+import { getPatientVitals, recordVital } from '../services/supabaseService';
+import { format } from 'date-fns';
 
-const VITALS_DATA = [
-  { time: '08:00', systolic: 142, diastolic: 88, hr: 72 },
-  { time: '10:00', systolic: 158, diastolic: 92, hr: 84 },
-  { time: '12:00', systolic: 162, diastolic: 98, hr: 88 },
-  { time: '14:00', systolic: 155, diastolic: 94, hr: 82 },
-  { time: '16:00', systolic: 148, diastolic: 90, hr: 78 },
-  { time: '18:00', systolic: 165, diastolic: 96, hr: 91 },
-];
+// Vitals handled via Supabase Service now
 
 const TABS = [
   { id: 'care-plan', label: 'Care Plan', icon: Stethoscope },
@@ -46,52 +41,78 @@ const ShiftNoteBlock = ({ note, onEdit }: { note?: string; onEdit: () => void })
   </div>
 );
 
-const VitalsTab = () => (
-  <div className="space-y-6">
-    <div className="bg-white border border-gray-border rounded-xl p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="font-serif font-bold text-navy">Blood Pressure Trend</h3>
-          <p className="text-xs text-gray-secondary mt-1">Last 24 hours • Threshold: 140/90 mmHg</p>
-        </div>
-        <div className="flex gap-2">
-          {['7d', '30d', 'All'].map(r => (
-            <button key={r} className="px-3 py-1 text-xs font-bold rounded-full border border-gray-border hover:border-primary hover:text-primary transition-colors">{r}</button>
-          ))}
-        </div>
-      </div>
-      <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={VITALS_DATA}>
-            <defs>
-              <linearGradient id="gradSys" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#C0392B" stopOpacity={0.1} />
-                <stop offset="95%" stopColor="#C0392B" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9ECEF" />
-            <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6C757D' }} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6C757D' }} domain={[60, 180]} />
-            <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #E9ECEF', fontSize: 12 }} />
-            {/* Threshold line at 140 */}
-            <Area type="monotone" dataKey="systolic" stroke="#C0392B" fill="url(#gradSys)" strokeWidth={2} dot={{ r: 3, fill: '#C0392B' }} />
-            <Area type="monotone" dataKey="diastolic" stroke="#2563EB" fill="transparent" strokeWidth={2} strokeDasharray="4 2" dot={false} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="flex items-center gap-6 mt-3">
-        <div className="flex items-center gap-2"><span className="w-3 h-0.5 bg-critical inline-block" /><span className="text-[11px] text-gray-secondary">Systolic</span></div>
-        <div className="flex items-center gap-2"><span className="w-3 h-0.5 bg-blue-500 inline-block border-dashed" /><span className="text-[11px] text-gray-secondary">Diastolic</span></div>
-        <div className="flex items-center gap-2"><span className="w-3 h-px bg-critical/40 inline-block border border-dashed border-critical" /><span className="text-[11px] text-critical">Threshold 140</span></div>
-      </div>
-    </div>
+const VitalsTab = ({ vitals, onRecord }: { vitals: Vital[], onRecord: () => void }) => {
+  const chartData = vitals
+    .filter(v => v.vital_type.startsWith('blood_pressure'))
+    .slice(0, 20)
+    .reverse()
+    .map(v => ({
+      time: format(new Date(v.recorded_at), 'HH:mm'),
+      value: v.value,
+      type: v.vital_type
+    }));
 
-    {/* Manual entry */}
-    <button className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-border rounded-xl text-sm font-semibold text-gray-secondary hover:border-primary hover:text-primary transition-colors">
-      <Plus className="w-4 h-4" /> Add Manual Reading
-    </button>
-  </div>
-);
+  // Re-format for double line chart (systolic/diastolic)
+  const formattedData = chartData.reduce((acc: any[], curr) => {
+    const existing = acc.find(a => a.time === curr.time);
+    if (existing) {
+      if (curr.type === 'blood_pressure_systolic') existing.systolic = curr.value;
+      if (curr.type === 'blood_pressure_diastolic') existing.diastolic = curr.value;
+    } else {
+      acc.push({
+        time: curr.time,
+        systolic: curr.type === 'blood_pressure_systolic' ? curr.value : undefined,
+        diastolic: curr.type === 'blood_pressure_diastolic' ? curr.value : undefined
+      });
+    }
+    return acc;
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border border-gray-border rounded-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="font-serif font-bold text-navy">Blood Pressure Trend</h3>
+            <p className="text-xs text-gray-secondary mt-1">Real-time data from Supabase • Threshold: 140/90 mmHg</p>
+          </div>
+          <div className="flex gap-2">
+            {['7d', '30d', 'All'].map(r => (
+              <button key={r} className="px-3 py-1 text-xs font-bold rounded-full border border-gray-border hover:border-primary hover:text-primary transition-colors">{r}</button>
+            ))}
+          </div>
+        </div>
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={formattedData}>
+              <defs>
+                <linearGradient id="gradSys" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#C0392B" stopOpacity={0.1} />
+                  <stop offset="95%" stopColor="#C0392B" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9ECEF" />
+              <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6C757D' }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6C757D' }} domain={[60, 180]} />
+              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #E9ECEF', fontSize: 12 }} />
+              <Area type="monotone" dataKey="systolic" stroke="#C0392B" fill="url(#gradSys)" strokeWidth={2} dot={{ r: 3, fill: '#C0392B' }} />
+              <Area type="monotone" dataKey="diastolic" stroke="#2563EB" fill="transparent" strokeWidth={2} strokeDasharray="4 2" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex items-center gap-6 mt-3">
+          <div className="flex items-center gap-2"><span className="w-3 h-0.5 bg-critical inline-block" /><span className="text-[11px] text-gray-secondary">Systolic</span></div>
+          <div className="flex items-center gap-2"><span className="w-3 h-0.5 bg-blue-500 inline-block border-dashed" /><span className="text-[11px] text-gray-secondary">Diastolic</span></div>
+          <div className="flex items-center gap-2"><span className="w-3 h-px bg-critical/40 inline-block border border-dashed border-critical" /><span className="text-[11px] text-critical">Threshold 140</span></div>
+        </div>
+      </div>
+
+      <button onClick={onRecord} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-border rounded-xl text-sm font-semibold text-gray-secondary hover:border-primary hover:text-primary transition-colors">
+        <Plus className="w-4 h-4" /> Add Manual Reading
+      </button>
+    </div>
+  );
+};
 
 const ComplianceTab = ({ patient }: { patient: Patient }) => {
   const days = Array.from({ length: 28 }, (_, i) => {
@@ -190,6 +211,28 @@ const CarePlanTab = ({ onEdit }: { onEdit: () => void }) => (
 
 export const PatientProfile = ({ patient, onClose, onEditCarePlan, onWriteShiftNote }: PatientProfileProps) => {
   const [activeTab, setActiveTab] = useState('care-plan');
+  const [vitals, setVitals] = useState<Vital[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    const fetchVitals = async () => {
+      setLoading(true);
+      try {
+        const data = await getPatientVitals(patient.id);
+        setVitals(data);
+      } catch (err) {
+        console.error("Failed to fetch vitals:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchVitals();
+  }, [patient.id]);
+
+  const handleRecordVital = async () => {
+    // This would typically open a modal, but for now we'll just log
+    console.log("Recording vital...");
+  };
 
   return (
     <motion.div
@@ -350,7 +393,7 @@ export const PatientProfile = ({ patient, onClose, onEditCarePlan, onWriteShiftN
             <AnimatePresence mode="wait">
               <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
                 {activeTab === 'care-plan' && <CarePlanTab onEdit={onEditCarePlan} />}
-                {activeTab === 'vitals' && <VitalsTab />}
+                {activeTab === 'vitals' && <VitalsTab vitals={vitals} onRecord={handleRecordVital} />}
                 {activeTab === 'compliance' && <ComplianceTab patient={patient} />}
                 {activeTab === 'notes' && <NotesTab note={patient.current_shift_note} onEdit={onWriteShiftNote} />}
               </motion.div>
